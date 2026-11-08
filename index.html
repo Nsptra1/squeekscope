@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SqueekScope — Squeekchain Round &amp; Settlement Tracker</title>
+<meta name="description" content="Live tracker for Squeekchain rounds, settlements and SQK issuance on Sepolia, plus Genesis community stats. Built on the public Squeekchain APIs.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0d12; --panel:#12161f; --panel2:#171c28; --line:#232a3a;
+    --text:#e8ecf3; --muted:#8b94a7; --faint:#5b6478;
+    --amber:#f5b942; --amber-dim:#8a6a25;
+    --teal:#3ddc97; --red:#ff6b6b; --gold:#ffd34d; --silver:#c9d1d9; --bronze:#e09a5a;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{color-scheme:dark}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5;
+    background-image:radial-gradient(1100px 480px at 70% -10%,rgba(245,185,66,.07),transparent 60%);}
+  .wrap{max-width:1120px;margin:0 auto;padding:28px 18px 40px}
+  a{color:var(--amber);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .mono{font-family:var(--mono)}
+
+  /* header */
+  header.top{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;justify-content:space-between;
+    border-bottom:1px solid var(--line);padding-bottom:20px}
+  .brand h1{font-family:var(--mono);font-size:30px;font-weight:800;letter-spacing:-.5px}
+  .brand h1 .scope{color:var(--amber)}
+  .brand p{color:var(--muted);font-size:14px;margin-top:4px;max-width:560px}
+  .status-box{text-align:right;min-width:230px}
+  .pill{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;font-weight:600;
+    padding:7px 13px;border-radius:999px;border:1px solid var(--line);background:var(--panel)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+  .dot.on{background:var(--teal);box-shadow:0 0 8px var(--teal)}
+  .dot.warn{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+  .dot.off{background:var(--red)}
+  .status-box .sub{color:var(--muted);font-size:12.5px;margin-top:8px;font-family:var(--mono)}
+  .status-box .sub b{color:var(--text);font-weight:600}
+
+  /* sections */
+  section{margin-top:30px}
+  .sec-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .sec-head h2{font-family:var(--mono);font-size:17px;font-weight:800;letter-spacing:.2px}
+  .sec-head .note{color:var(--muted);font-size:13px}
+  .sec-head .err{color:var(--red);font-size:13px;font-family:var(--mono)}
+
+  .grid{display:grid;gap:12px}
+  .grid.chain{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+  .grid.stats{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px 16px}
+  .card .k{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.09em;font-weight:600}
+  .card .v{font-family:var(--mono);font-size:21px;font-weight:800;margin-top:5px;word-break:break-all}
+  .card .v.small{font-size:15px;font-weight:600}
+  .card .d{color:var(--muted);font-size:12.5px;margin-top:4px}
+  .card .d b{color:var(--text);font-weight:600}
+  .card.accent{border-color:var(--amber-dim);background:linear-gradient(180deg,rgba(245,185,66,.06),transparent 55%),var(--panel)}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  canvas#chart{width:100%;height:230px;display:block}
+  .unavailable{color:var(--muted);font-family:var(--mono);font-size:13px;padding:14px 4px}
+
+  /* table */
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:760px}
+  th{font-family:var(--mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+    text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--panel2);white-space:nowrap}
+  td{padding:10px 14px;border-bottom:1px solid #1a2130;vertical-align:top;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  td.num,th.num{text-align:right;font-family:var(--mono)}
+  td .dim{color:var(--muted);font-size:12px}
+  .badge{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid var(--line)}
+  .badge.safe{color:var(--teal);border-color:#1f4d3a}
+  .tier{font-family:var(--mono);font-size:11px;font-weight:700;text-transform:capitalize}
+  .tier.gold{color:var(--gold)} .tier.silver{color:var(--silver)} .tier.bronze{color:var(--bronze)}
+
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:820px){.two-col{grid-template-columns:1fr}}
+  .contracts td{white-space:normal;word-break:break-all}
+  .contracts table{min-width:0}
+
+  footer{margin-top:38px;border-top:1px solid var(--line);padding-top:16px;color:var(--muted);font-size:13px;
+    display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1>🐹 Squeek<span class="scope">Scope</span></h1>
+      <p>A live round &amp; settlement tracker for Squeekchain — the hamster-powered proof-of-work
+         toychain settling on Ethereum Sepolia. Every lap the hamster runs becomes work; settled work
+         becomes Squeek blocks; completed blocks mint SQK to Squeek holders. This page reads the
+         public APIs directly and derives the numbers that matter.</p>
+    </div>
+    <div class="status-box">
+      <span class="pill"><span class="dot" id="hamster-dot"></span><span id="hamster-status">Checking on the hamster…</span></span>
+      <div class="sub" id="hamster-sub">Reading the live media feed and the latest settlement.</div>
+      <div class="sub">Last updated <b id="last-updated">—</b> · auto-refresh 30s</div>
+    </div>
+  </header>
+
+  <!-- CHAIN STATUS -->
+  <section id="sec-chain">
+    <div class="sec-head"><h2>⛓ Chain status</h2><span class="note">Indexer view from the Squeekchain events API</span><span class="err" id="chain-err"></span></div>
+    <div class="grid chain">
+      <div class="card"><div class="k">Network</div><div class="v small" id="c-network">—</div><div class="d" id="c-deployment">—</div></div>
+      <div class="card"><div class="k">Indexed through block</div><div class="v" id="c-indexed">—</div><div class="d">Latest block the indexer has processed</div></div>
+      <div class="card"><div class="k">Safe through block</div><div class="v" id="c-safe">—</div><div class="d" id="c-safe-time">—</div></div>
+      <div class="card"><div class="k">Confirmation lag</div><div class="v" id="c-lag">—</div><div class="d" id="c-conf">—</div></div>
+      <div class="card"><div class="k">API status</div><div class="v small" id="c-apistatus">—</div><div class="d" id="c-release">—</div></div>
+    </div>
+  </section>
+
+  <!-- SQK ISSUANCE -->
+  <section id="sec-issuance">
+    <div class="sec-head"><h2>🪙 SQK issuance</h2><span class="note">Derived from the settlement feed — SQK is minted per completed Squeek block under the funded-stream reward model (<span class="mono">funded-stream-q128-1</span>)</span><span class="err" id="issuance-err"></span></div>
+    <div class="grid stats">
+      <div class="card accent"><div class="k">SQK minted · fetched window</div><div class="v" id="i-window-sqk">—</div><div class="d" id="i-window-note">—</div></div>
+      <div class="card"><div class="k">Avg SQK per completed block</div><div class="v" id="i-per-block">—</div><div class="d">Derived: window SQK ÷ window blocks. The stream rate drifts slightly between settlements.</div></div>
+      <div class="card"><div class="k">Issuance rate</div><div class="v" id="i-rate">—</div><div class="d" id="i-rate-note">—</div></div>
+      <div class="card"><div class="k">Settlement cadence</div><div class="v" id="i-cadence">—</div><div class="d">Average gap between settlements in the window — one settlement closes the current round of wheel work.</div></div>
+      <div class="card"><div class="k">Hamster work rate</div><div class="v" id="i-workrate">—</div><div class="d" id="i-work-note">—</div></div>
+      <div class="card"><div class="k">Lifetime totals</div><div class="v" id="i-lifetime">—</div><div class="d" id="i-lifetime-note">—</div></div>
+    </div>
+    <div class="panel" style="margin-top:12px">
+      <div class="k" style="color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.09em;font-weight:600;margin-bottom:8px">SQK minted per settlement (oldest → newest)</div>
+      <canvas id="chart"></canvas>
+      <div class="unavailable" id="chart-note" style="display:none"></div>
+    </div>
+  </section>
+
+  <!-- SETTLEMENTS -->
+  <section id="sec-settlements">
+    <div class="sec-head"><h2>🧾 Recent settlements</h2><span class="note">Each settlement finalises a round of wheel work on Sepolia</span><span class="err" id="settlements-err"></span></div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>
+          <th>Round</th><th>Squeek blocks</th><th class="num">Work (laps)</th><th class="num">SQK minted</th>
+          <th>Settled at (UTC)</th><th class="num">Sepolia block</th><th>Status</th><th>Tx</th>
+        </tr></thead>
+        <tbody id="settlements-body"><tr><td colspan="8" class="unavailable">Loading settlements…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CONTRACTS -->
+  <section id="sec-contracts">
+    <div class="sec-head"><h2>📜 Deployment contracts</h2><span class="note">Read from the events API deployment manifest</span><span class="err" id="contracts-err"></span></div>
+    <div class="tablewrap contracts">
+      <table>
+        <thead><tr><th>Component</th><th>Address (Sepolia)</th></tr></thead>
+        <tbody id="contracts-body"><tr><td colspan="2" class="unavailable">Loading deployment manifest…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- GENESIS -->
+  <section id="sec-genesis">
+    <div class="sec-head"><h2>🌱 Genesis community</h2><span class="note">Aura decides whitelist priority for the Squeek NFT mint</span><span class="err" id="genesis-err"></span></div>
+    <div class="grid stats">
+      <div class="card"><div class="k">Genesis members</div><div class="v" id="g-members">—</div><div class="d" id="g-snapshot">—</div></div>
+      <div class="card"><div class="k">Total Aura</div><div class="v" id="g-aura">—</div><div class="d" id="g-aura-avg">—</div></div>
+      <div class="card"><div class="k">Badges earned</div><div class="v" id="g-badges">—</div><div class="d" id="g-badges-avg">—</div></div>
+      <div class="card"><div class="k">Projects verified</div><div class="v" id="g-projects">—</div><div class="d">Builder projects approved through Genesis Code</div></div>
+    </div>
+    <div class="two-col" style="margin-top:12px">
+      <div class="tablewrap">
+        <table style="min-width:0">
+          <thead><tr><th>#</th><th>Member</th><th>Tier</th><th class="num">Aura</th><th class="num">Badges</th></tr></thead>
+          <tbody id="leaderboard-body"><tr><td colspan="5" class="unavailable">Loading leaderboard…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="k">How to read this board</div>
+        <div class="d" style="font-size:13.5px;line-height:1.65;margin-top:8px">
+          Aura comes from badges across three paths — <b>Clout</b> (sign-up, X/Discord links, invites),
+          <b>Code</b> (Tester transactions and verified builder projects) and <b>Capital</b>
+          (holder snapshots, +100 Aura per listed collection, max 500). The top of the board sits
+          thousands of Aura above the community average shown on the left, and the top five alone
+          hold <b id="g-top5-share">—</b> of all Aura in circulation — rank, not raw participation,
+          is what the whitelist rewards.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Built on the public Squeekchain APIs · Sepolia testnet · Not affiliated with the Squeekchain team</span>
+    <span class="mono">SqueekScope · read-only · no wallet required</span>
+  </footer>
+</div>
+
+<script>
+'use strict';
+/* ---------- endpoints (public, no auth) ---------- */
+var API = {
+  events:      'https://api.squeekchain.com/v1/events',
+  settlements: 'https://api.squeekchain.com/v1/settlements',
+  live:        'https://media.squeekchain.com/live/current.json',
+  stats:       'https://community.squeekchain.com/v1/community/stats',
+  leaderboard: 'https://community.squeekchain.com/v1/community/leaderboard'
+};
+var EXPLORER = 'https://sepolia.etherscan.io';
+var SQK_DECIMALS = 18; /* verified on-chain: SQK token 0xd78a3956cf63164d1fa1c622ad3c66623162fa1e, decimals() = 18 */
+
+/* ---------- helpers ---------- */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function fmtInt(n){ var x = Number(n); return isFinite(x) ? x.toLocaleString('en-US') : '—'; }
+function fmtNum(n, digits){ var x = Number(n); if(!isFinite(x)) return '—';
+  return x.toLocaleString('en-US',{minimumFractionDigits:digits, maximumFractionDigits:digits}); }
+function bigToSqk(base){ /* base-unit string -> SQK float (display precision only) */
+  try { return Number(BigInt(base)) / Math.pow(10, SQK_DECIMALS); } catch(e){ return NaN; } }
+function fmtSqk(base){ var v = bigToSqk(base); return isFinite(v) ? fmtNum(v, 2) + ' SQK' : '—'; }
+function shortHash(h){ return h && h.length > 14 ? h.slice(0,8) + '…' + h.slice(-6) : (h || '—'); }
+function relTime(iso){ var t = Date.parse(iso); if(isNaN(t)) return '';
+  var s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 90) return Math.round(s) + 's ago';
+  if (s < 5400) return Math.round(s/60) + 'm ago';
+  if (s < 172800) return (s/3600).toFixed(1) + 'h ago';
+  return (s/86400).toFixed(1) + 'd ago'; }
+function utcTime(iso){ var t = Date.parse(iso); if(isNaN(t)) return '—';
+  var d = new Date(t); return d.toISOString().slice(0,16).replace('T',' ') + ' UTC'; }
+function fetchJson(url){ return fetch(url, {headers:{'Accept':'application/json'}}).then(function(r){
+  if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }); }
+function setErr(id, msg){ var el = $(id); if(el) el.textContent = msg || ''; }
+
+/* ---------- live hamster (media feed; defensive — shape not published) ---------- */
+function pickState(d){
+  if(!d || typeof d !== 'object') return null;
+  var keys = ['running','isRunning','active','awake','isAwake','hamsterRunning'];
+  for (var i=0;i<keys.length;i++) if (typeof d[keys[i]] === 'boolean')
+    return d[keys[i]] ? 'running' : 'sleeping';
+  var s = d.status || d.state || d.hamsterStatus || d.activity;
+  if (typeof s === 'string'){
+    var v = s.toLowerCase();
+    if (v.indexOf('run') >= 0 || v === 'active' || v === 'awake' || v === 'live') return 'running';
+    if (v.indexOf('sleep') >= 0 || v === 'idle' || v === 'resting') return 'sleeping';
+  }
+  return null;
+}
+var latestSettlementAt = null; /* filled by the settlements loader; used as activity inference */
+function renderHamster(media){
+  var dot = $('hamster-dot'), label = $('hamster-status'), sub = $('hamster-sub');
+  var state = pickState(media);
+  var round = media && (media.currentRound || media.round || (media.live && media.live.round));
+  if (state === 'running'){ dot.className = 'dot on'; label.textContent = '🐹 Hamster is running';
+    sub.innerHTML = 'Live media feed reports the wheel turning' + (round != null ? ' · current round <b>' + esc(round) + '</b>' : '') + '.'; return; }
+  if (state === 'sleeping'){ dot.className = 'dot warn'; label.textContent = '🐹 Hamster is resting';
+    sub.textContent = 'Live media feed reports the wheel is still. No running, no blocks — the chain waits for the hamster.'; return; }
+  /* media feed gave nothing usable -> infer activity from settlement recency */
+  if (latestSettlementAt){
+    var mins = (Date.now() - latestSettlementAt) / 60000;
+    if (mins < 15){ dot.className = 'dot on'; label.textContent = '🐹 Wheel active (inferred)';
+      sub.innerHTML = 'Live media feed unavailable; settlements are flowing — last one <b>' + relTime(new Date(latestSettlementAt).toISOString()) + '</b>, so the hamster has been running recently.'; return; }
+    dot.className = 'dot warn'; label.textContent = '🐹 Wheel quiet (inferred)';
+    sub.innerHTML = 'Live media feed unavailable and no settlement for <b>' + Math.round(mins) + ' min</b> — the hamster may be resting.'; return;
+  }
+  dot.className = 'dot off'; label.textContent = 'Hamster status unavailable';
+  sub.textContent = 'The live media feed did not respond. Chain data below is unaffected.';
+}
+function loadLive(){
+  fetchJson(API.live).then(function(d){ renderHamster(d); })
+    .catch(function(){ renderHamster(null); });
+}
+
+/* ---------- chain status + contracts (events API) ---------- */
+function loadEvents(){
+  fetchJson(API.events).then(function(d){
+    setErr('chain-err',''); setErr('contracts-err','');
+    var ch = d.chain || {};
+    $('c-network').textContent = (ch.target ? ch.target[0].toUpperCase() + ch.target.slice(1) : 'Sepolia') +
+      (ch.chainId ? ' · chain ' + ch.chainId : '');
+    $('c-deployment').textContent = ch.deploymentBlock ? 'Deployment block ' + fmtInt(ch.deploymentBlock) : '—';
+    $('c-indexed').textContent = fmtInt(ch.indexedThroughBlock);
+    $('c-safe').textContent = fmtInt(ch.safeThroughBlock);
+    $('c-safe-time').textContent = ch.safeBlockTimestamp ? 'Safe as of ' + utcTime(ch.safeBlockTimestamp) : '—';
+    var lag = (Number(ch.indexedThroughBlock) - Number(ch.safeThroughBlock));
+    $('c-lag').textContent = isFinite(lag) ? fmtInt(lag) + ' blocks' : '—';
+    $('c-conf').innerHTML = ch.confirmations ? 'Settlements confirm after <b>' + esc(ch.confirmations) + ' blocks</b>' : '—';
+    $('c-apistatus').textContent = d.status || '—';
+    var dep = d.deployment || {};
+    $('c-release').textContent = dep.releaseId ? 'Release ' + dep.releaseId : (d.release && d.release.id ? 'Release ' + d.release.id : '—');
+
+    var comps = (dep.components) || {};
+    var names = [['core','SqueekCore'],['token','SQK token'],['mining','SqueekMining'],['collection','Squeeks collection'],['staking','Staking']];
+    var rows = '';
+    names.forEach(function(pair){
+      var c = comps[pair[0]];
+      if (c && c.address) rows += '<tr><td>' + pair[1] + '</td><td class="mono"><a href="' + EXPLORER +
+        '/address/' + esc(c.address) + '" target="_blank" rel="noopener">' + esc(c.address) + '</a></td></tr>';
+    });
+    $('contracts-body').innerHTML = rows || '<tr><td colspan="2" class="unavailable">No components listed in the manifest.</td></tr>';
+  }).catch(function(e){
+    setErr('chain-err','events feed unavailable (' + e.message + ')');
+    setErr('contracts-err','deployment manifest unavailable');
+  });
+}
+
+/* ---------- settlements: issuance summary, chart, table ---------- */
+var chartData = []; /* [{round, sqk}] chronological */
+function loadSettlements(){
+  fetchJson(API.settlements).then(function(d){
+    setErr('issuance-err',''); setErr('settlements-err','');
+    var list = Array.isArray(d.recentSettlements) ? d.recentSettlements.slice() : [];
+    if (list.length && list[0].blockTimestamp) latestSettlementAt = Date.parse(list[0].blockTimestamp);
+
+    /* table (API order: newest first) */
+    var rows = '';
+    list.forEach(function(r){
+      rows += '<tr>' +
+        '<td class="mono"><b>' + esc(r.settledThroughRound) + '</b></td>' +
+        '<td class="mono">' + fmtInt(r.completedBlockCount) + ' <span class="dim">(#' + esc(r.firstCompletedBlock) + '–#' + esc(r.lastCompletedBlock) + ')</span></td>' +
+        '<td class="num">' + fmtInt(r.workAdded) + '</td>' +
+        '<td class="num">' + (r.sqkMintedBaseUnits != null ? fmtSqk(r.sqkMintedBaseUnits) : '<span class="dim">pending</span>') + '</td>' +
+        '<td>' + utcTime(r.blockTimestamp) + '<br><span class="dim">' + relTime(r.blockTimestamp) + '</span></td>' +
+        '<td class="num">' + fmtInt(r.ethereumBlockNumber) + '</td>' +
+        '<td><span class="badge ' + esc(r.confirmationStatus || '') + '">' + esc(r.confirmationStatus || '—') + '</span></td>' +
+        '<td class="mono">' + (r.transactionHash ? '<a href="' + EXPLORER + '/tx/' + esc(r.transactionHash) + '" target="_blank" rel="noopener">' + shortHash(r.transactionHash) + ' ↗</a>' : '—') + '</td>' +
+      '</tr>';
+    });
+    $('settlements-body').innerHTML = rows || '<tr><td colspan="8" class="unavailable">No settlements in the current window.</td></tr>';
+
+    /* derived issuance stats (BigInt sums — base units exceed float precision) */
+    var withSqk = list.filter(function(r){ return r.sqkMintedBaseUnits != null; });
+    var totalBase = 0n, totalBlocks = 0, totalWork = 0, windowBlocks = 0;
+    list.forEach(function(r){ totalWork += Number(r.workAdded || 0); windowBlocks += Number(r.completedBlockCount || 0); });
+    withSqk.forEach(function(r){ try { totalBase += BigInt(r.sqkMintedBaseUnits); } catch(e){}
+      totalBlocks += Number(r.completedBlockCount || 0); });
+    var totalSqk = Number(totalBase) / Math.pow(10, SQK_DECIMALS);
+
+    $('i-window-sqk').textContent = withSqk.length ? fmtNum(totalSqk, 2) + ' SQK' : '—';
+    $('i-window-note').innerHTML = 'Across <b>' + withSqk.length + ' of ' + list.length + '</b> fetched settlements' +
+      (withSqk.length < list.length ? ' — the newest settlement\'s mint figure is still pending' : '') +
+      ', rounds <b>' + esc(list.length ? list[list.length-1].settledThroughRound : '—') + '–' + esc(list.length ? list[0].settledThroughRound : '—') + '</b>.';
+    $('i-per-block').textContent = totalBlocks ? fmtNum(totalSqk / totalBlocks, 2) + ' SQK' : '—';
+
+    var spanH = NaN;
+    if (list.length > 1){
+      var newest = Date.parse(list[0].blockTimestamp), oldest = Date.parse(list[list.length-1].blockTimestamp);
+      spanH = (newest - oldest) / 3600000;
+    }
+    if (isFinite(spanH) && spanH > 0){
+      $('i-rate').textContent = fmtNum(totalSqk / spanH, 0) + ' SQK/h';
+      $('i-rate-note').innerHTML = 'Window average over <b>' + fmtNum(spanH, 1) + ' h</b> of settlements. Real issuance follows the hamster: no running, no blocks, no SQK.';
+      $('i-cadence').textContent = fmtNum(spanH * 60 / (list.length - 1), 1) + ' min';
+      $('i-workrate').textContent = fmtInt(Math.round(totalWork / spanH)) + ' laps/h';
+    } else {
+      $('i-rate').textContent = '—'; $('i-cadence').textContent = '—'; $('i-workrate').textContent = '—';
+    }
+    $('i-work-note').innerHTML = '<b>' + fmtInt(totalWork) + '</b> laps of work settled in the window, completing <b>' + fmtInt(windowBlocks) + '</b> Squeek blocks' +
+      (windowBlocks ? ' — about <b>' + fmtNum(totalWork / windowBlocks, 1) + ' laps per block</b>' : '') + '.';
+
+    var s = d.summary || {};
+    $('i-lifetime').textContent = fmtInt(s.completedBlockCount) + ' blocks';
+    $('i-lifetime-note').innerHTML = '<b>' + fmtInt(s.settlementCount) + '</b> settlements all-time (<b>' + fmtInt(s.archivedSettlementCount) + '</b> archived), <b>' +
+      fmtInt(s.workAdded) + '</b> total laps of work, <b>' + fmtInt(s.activeRoundCount) + '</b> rounds currently open in the active set.';
+
+    /* chart data: chronological, only settlements reporting a mint figure */
+    chartData = withSqk.slice().reverse().map(function(r){
+      return { round: r.settledThroughRound, sqk: bigToSqk(r.sqkMintedBaseUnits) };
+    });
+    drawChart();
+    renderHamster(null); /* refresh the inferred activity line now that recency is known */
+  }).catch(function(e){
+    setErr('issuance-err','settlements feed unavailable (' + e.message + ')');
+    setErr('settlements-err','settlements feed unavailable');
+  });
+}
+
+/* ---------- canvas chart ---------- */
+function drawChart(){
+  var cv = $('chart'), note = $('chart-note');
+  if (!chartData.length){ cv.style.display = 'none'; note.style.display = 'block';
+    note.textContent = 'No settlement in the fetched window reports a mint figure yet — chart unavailable.'; return; }
+  cv.style.display = 'block'; note.style.display = 'none';
+  var dpr = window.devicePixelRatio || 1;
+  var W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  var ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+  var max = Math.max.apply(null, chartData.map(function(p){ return p.sqk; })) * 1.15;
+  var padL = 8, padR = 8, padT = 26, padB = 30;
+  var plotW = W - padL - padR, plotH = H - padT - padB;
+  ctx.strokeStyle = 'rgba(139,148,167,.18)'; ctx.lineWidth = 1;
+  ctx.fillStyle = '#8b94a7'; ctx.font = '11px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+  for (var g = 0; g <= 3; g++){
+    var y = padT + plotH - (plotH * g / 3);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    ctx.fillText(fmtInt(Math.round(max * g / 3)), padL + 2, y - 4);
+  }
+  var slot = plotW / chartData.length, bw = Math.min(54, slot * 0.62);
+  chartData.forEach(function(p, i){
+    var h = (p.sqk / max) * plotH;
+    var x = padL + slot * i + (slot - bw) / 2, y = padT + plotH - h;
+    var grad = ctx.createLinearGradient(0, y, 0, padT + plotH);
+    grad.addColorStop(0, '#f5b942'); grad.addColorStop(1, '#8a6a25');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, bw, h, [4, 4, 0, 0]); else ctx.rect(x, y, bw, h);
+    ctx.fill();
+    ctx.fillStyle = '#e8ecf3'; ctx.textAlign = 'center'; ctx.font = '600 11px JetBrains Mono, monospace';
+    ctx.fillText(fmtInt(Math.round(p.sqk)), x + bw / 2, y - 6);
+    ctx.fillStyle = '#8b94a7'; ctx.font = '11px JetBrains Mono, monospace';
+    ctx.fillText('R' + p.round, x + bw / 2, padT + plotH + 18);
+  });
+}
+
+/* ---------- Genesis community ---------- */
+function loadGenesis(){
+  var statsDone = fetchJson(API.stats).then(function(s){
+    setErr('genesis-err','');
+    $('g-members').textContent = fmtInt(s.members);
+    $('g-snapshot').textContent = s.snapshot && s.snapshot.computedAt ? 'Snapshot ' + relTime(s.snapshot.computedAt) : '—';
+    $('g-aura').textContent = fmtInt(s.totalAura);
+    $('g-aura-avg').innerHTML = s.members ? 'Average <b>' + fmtNum(s.totalAura / s.members, 1) + ' Aura</b> per member' : '—';
+    $('g-badges').textContent = fmtInt(s.badgesEarned);
+    $('g-badges-avg').innerHTML = s.members ? 'Average <b>' + fmtNum(s.badgesEarned / s.members, 2) + ' badges</b> per member' : '—';
+    $('g-projects').textContent = fmtInt(s.projectsVerified);
+    return s;
+  });
+  var boardDone = fetchJson(API.leaderboard).then(function(d){
+    var entries = (d.entries || []).slice(0, 5);
+    var rows = '';
+    entries.forEach(function(e){
+      var idn = e.identity || {};
+      var name = idn.name || idn.username || e.code;
+      var user = idn.username ? ' <span class="dim">@' + esc(idn.username) + '</span>' : '';
+      rows += '<tr><td class="mono">' + esc(e.rank) + '</td>' +
+        '<td><a href="https://squeekchain.com/genesis/' + esc(e.code) + '" target="_blank" rel="noopener">' + esc(name) + '</a>' + user + '</td>' +
+        '<td><span class="tier ' + esc(e.tier || '') + '">' + esc(e.tier || '—') + '</span></td>' +
+        '<td class="num">' + fmtInt(e.aura) + '</td><td class="num">' + fmtInt(e.badges) + '</td></tr>';
+    });
+    $('leaderboard-body').innerHTML = rows || '<tr><td colspan="5" class="unavailable">Leaderboard is empty.</td></tr>';
+    return entries;
+  });
+  Promise.all([statsDone, boardDone]).then(function(res){
+    var s = res[0], top5 = res[1];
+    if (s && s.totalAura && top5 && top5.length){
+      var sum = top5.reduce(function(a, e){ return a + Number(e.aura || 0); }, 0);
+      $('g-top5-share').textContent = (100 * sum / s.totalAura).toFixed(2) + '%';
+    }
+  }).catch(function(){ /* individual loaders already report their own failure */ });
+  statsDone.catch(function(e){ setErr('genesis-err','community stats unavailable (' + e.message + ')'); });
+  boardDone.catch(function(e){ setErr('genesis-err','leaderboard unavailable (' + e.message + ')');
+    $('leaderboard-body').innerHTML = '<tr><td colspan="5" class="unavailable">Leaderboard unavailable.</td></tr>'; });
+}
+
+/* ---------- boot + refresh ---------- */
+function refreshAll(){
+  loadLive(); loadEvents(); loadSettlements(); loadGenesis();
+  $('last-updated').textContent = new Date().toLocaleTimeString('en-GB');
+}
+window.addEventListener('resize', drawChart);
+refreshAll();
+setInterval(refreshAll, 30000);
+</script>
+</body>
+</html>
