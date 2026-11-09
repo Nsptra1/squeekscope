@@ -1,6 +1,8 @@
 <!-- SQUEEKCHAIN-VERIFY: pending -->
 
 # SqueekScope — Squeekchain Round & Settlement Tracker
+**Open-source developer tool** — a live monitoring dashboard for the Squeekchain testnet (Ethereum Sepolia), built with vanilla HTML/CSS/JS. Live demo: https://nsptra1.github.io/squeekscope/
+
 
 SqueekScope is a read-only, single-page dashboard that tracks the live state of
 **Squeekchain** — the hamster-powered proof-of-work toychain that settles on
